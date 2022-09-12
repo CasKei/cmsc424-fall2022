@@ -15,7 +15,10 @@ order by Id asc;
 ### Output column order: Id, Title, Tags
 ### Order by Id ascending
 queries[1] = """
-select 0;
+select Id, Title, Tags
+from posts
+where tags like '%<postgresql-9.4>%'
+order by Id asc;
 """
 
 
@@ -26,7 +29,9 @@ select 0;
 ### Output columns: Id, DisplayName, Num_years
 ### Order output by Num_years increasing, and then by Id ascending
 queries[2] = """
-select 0;
+select Id, DisplayName, age('2022-09-01', CreationDate) as Num_years 
+from users where DisplayName='Jason'
+order by num_years asc, Id asc ;
 """
 
 ### 3. Select all the "distinct" years that users with names starting with 'M'
@@ -34,7 +39,9 @@ select 0;
 ### Output column: Year
 ### Order output by Year ascending
 queries[3] = """
-select 0;
+select distinct extract(year from CreationDate) as Year
+from users where displayname like 'M%'
+order by Year asc;
 """
 
 ### 4. Write a query to find users who have, on average, given at least 1 UpVote per
@@ -45,7 +52,9 @@ select 0;
 ### Output columns: Id, DisplayName, CreationDate, UpVotes
 ### Order by Id ascending
 queries[4] = """
-select 0;
+select Id, DisplayName, CreationDate, Upvotes
+from users
+where ;
 """
 
 ### 5. Write a single query to report all Badges for the users with reputation between 10000 and 11000, by joining Users and Badges.
