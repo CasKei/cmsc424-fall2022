@@ -29,7 +29,7 @@ order by Id asc;
 ### Output columns: Id, DisplayName, Num_years
 ### Order output by Num_years increasing, and then by Id ascending
 queries[2] = """
-select Id, DisplayName, age('2022-09-01', CreationDate) as Num_years 
+select Id, DisplayName, extract(year from age('2022-09-01', CreationDate)) as Num_years 
 from users where DisplayName='Jason'
 order by num_years asc, Id asc ;
 """
@@ -52,17 +52,32 @@ order by Year asc;
 ### Output columns: Id, DisplayName, CreationDate, UpVotes
 ### Order by Id ascending
 queries[4] = """
-select Id, DisplayName, CreationDate, Upvotes
+select Id, DisplayName, CreationDate, UpVotes
 from users
-where ;
+where Upvotes > 0 and date_part( 'day', '2022-09-01'::timestamp - CreationDate) > 0 and UpVotes / date_part( 'day', '2022-09-01'::timestamp - CreationDate) >= 1
+order by Id asc;
 """
 
 ### 5. Write a single query to report all Badges for the users with reputation between 10000 and 11000, by joining Users and Badges.
 ### Output Column: Id (from Users), DisplayName, Name (from Badges), Reputation
 ### Order by: Id increasing
 queries[5] = """
-select 0;
+select users.id as id, displayname, badges.name as name, reputation
+from users join badges on (
+        reputation >= 10000 and 
+        reputation <= 11000 and 
+        users.id = badges.userid)
+order by id asc;
 """
+
+'''
+select users.id as id, displayname, badges.name as name, reputation
+from users join badges on (
+        reputation >= 10000 and 
+        reputation <= 11000 and 
+        users.id = badges.userid)
+order by id asc;
+'''
 
 ### 6. Write a query to find all Posts who satisfy one of the following conditions:
 ###        - the post title contains 'postgres' and the number of views is at least 50000
@@ -71,14 +86,24 @@ select 0;
 ### Output columns: Id, Title, ViewCount
 ### Order by: Id ascending
 queries[6] = """
-select 0;
+select Id, Title, ViewCount
+from posts
+where 
+        (Title ilike '%postgres%' and ViewCount >= 50000) or 
+        (Title ilike '%mongodb%' and ViewCount >= 25000)
+order by Id asc;
 """
+
 
 
 ### 7. Count the number of the Comments made by the user with DisplayName 'JHFB'.
 ### Output columns: Num_Comments
 queries[7] = """
-select 0;
+select count(*) as Num_Comments
+from comments
+where userid in
+        (select id from users
+        where displayname = 'JHFB');
 """
 
 ### 8. Find the Users who have received badges with names: "Guru" and "Curious". 
@@ -87,7 +112,10 @@ select 0;
 ### Output columns: UserId
 ### Order by: UserId ascending
 queries[8] = """
-select 0;
+select userid from badges where name='Guru'
+intersect
+select userid from badges where name='Curious'
+order by userid asc;
 """
 
 ### 9. "Tags" field in Posts lists out the tags associated with the post in the format "<tag1><tag2>..<tagn>".
@@ -96,7 +124,12 @@ select 0;
 ### Output columns: Id, Title, Tags
 ### Order by: Id ascending
 queries[9] = """
-select 0;
+select Id, Title, Tags
+from posts
+group by id
+        having Tags like '%<postgresql>%' and 
+        cardinality(string_to_array(Tags, '><')) >= 6
+order by id asc;
 """
 
 
@@ -111,19 +144,46 @@ select 0;
 ### Order by Id ascending (there may be more than one answer)
 queries[10] = """
 with temp as (
+        select userid, count(*) as num_comments
+        from comments
+        group by userid
+)
+select userid as id, displayname, num_comments
+from temp, users
+where num_comments = (
+        select max(num_comments)
+        from temp
+) and temp.userid = users.id
+order by temp.userid asc;
+"""
+# does not work
+'''
+with temp as (
         select Users.Id, DisplayName, count(*) as num_Comments 
         from users, comments 
         where users.id = comments.userid 
         group by users.id, users.displayname)
-select 0;
-"""
+select users.id, users.displayname, temp.num_comments
+from users, temp
+where temp.num_comments = (
+        select max(temp.num_comments)
+        from temp
+)
+order by users.id asc
+;
+'''
 
 ### 11. List the users who posted no comments and with at least 500 views. 
 ### Hint: Use "not in".
 ### Output Columns: Id, DisplayName
 ### Order by Id ascending
 queries[11] = """
-select 0;
+select id, displayname
+from users
+where 
+        views >= 500 and
+        id not in (select userid from comments)
+order by id asc;
 """
 
 
@@ -133,9 +193,20 @@ select 0;
 ### Output: Id (Posts), Title, Text (Comments)
 ### Order by: Id ascending
 queries[12] = """
-select 0;
+select posts.id as Id, posts.title as Title, comments.text as Text
+from posts, comments, posttypes
+where
+        posts.posttypeid = posttypes.posttypeid
+        and comments.postid = posts.id
+        and posttypes.description = 'Moderator nomination'
+        and comments.score >= 10
+order by posts.id asc;
 """
-
+'''
+posttypes (posttypeid, description)
+posts (id, posttypeid, title)
+comments (id, text, postid, score)
+'''
 
 ### 13. Generate a list - (Badge_Name, Num_Users) - containing the different
 ### badges, and the number of users who received those badges.
@@ -144,8 +215,22 @@ select 0;
 ### Order by Badge_name asc
 ### Use LIMIT to limit the output to first 20 rows.
 queries[13] = """
-select 0;
+select name as badge_name, count(userid) as num_users
+from (select distinct name , userid from badges) as foo
+group by badge_name
+order by badge_name asc
+limit 20;
 """
+
+#TODO gives same names but diff num, dk why, come back for revision
+"""
+select distinct name as Badge_Name, count(userid) as Num_Users
+from badges
+group by badge_name
+order by Badge_Name asc
+limit 20;
+"""
+
 
 ### 14. For each post, count the number of comments for that post.
 ###
@@ -162,7 +247,11 @@ select 0;
 ### Output Columns: Id, Num_Comments
 ### Order by: Id ascending
 queries[14] = """
-select 0;
+select posts.id as Id, count(comments.id) as num_comments
+from posts left outer join comments
+        on (posts.id = comments.postid)
+group by posts.id
+order by Id asc;
 """
 
 
@@ -179,21 +268,45 @@ select 0;
 ### Output columns: Reputation, Num_users
 ### Order by Reputation ascending
 queries[15] = """
-select 0;
+select r as Reputation, count(id) as Num_Users
+from generate_series(1,100) as g(r) 
+        left outer join users
+on (r = users.reputation)
+group by r
+order by r asc;
 """
 
 
 ### 16. Generalizing #14 above, associate posts with both the number of
 ### comments and the number of votes
 ### 
+#14:
+"""
+select posts.id as Id, count(comments.id) as num_comments
+from posts left outer join comments
+        on (posts.id = comments.postid)
+group by posts.id
+order by Id asc;
+"""
+
 ### As above, using scalar subqueries won't scale to the number of tuples.
 ### Instead use WITH and Left Outer Joins.
 ###
 ### Output Columns: Id, Num_Comments, Num_Votes
 ### Order by: Id ascending
 queries[16] = """
-select 0;
+with temp(Id, num_comments) as (
+        select posts.id as Id, count(comments.id) as num_comments
+        from posts left outer join comments on (posts.id = comments.postid)
+        group by posts.id
+        order by id asc
+)
+select temp.id as Id, temp.num_comments as num_comments, count(votes.id) as num_votes
+from temp left outer join votes on (temp.id = votes.postid)
+group by temp.id, temp.num_comments
+order by id asc;
 """
+
 
 ### 17. Write a query to find the posts with at least 7 children (i.e., at
 ### least 7 other posts with that post as the parent
@@ -201,7 +314,17 @@ select 0;
 ### Output columns: Id, Title
 ### Order by: Id ascending
 queries[17] = """
-select 0;
+with p as (
+        select parentid, count(parentid)
+        from posts
+        group by parentid
+        having count(parentid) >= 7
+)
+select posts.id as id, posts.title as title
+from posts, p
+where posts.id = p.parentid
+group by posts.id
+order by posts.id asc;
 """
 
 ### 18. Find posts such that, between the post and its children (i.e., answers
@@ -211,9 +334,33 @@ select 0;
 ###
 ### Output columns: Id, Title
 ### Order by: Id ascending
+
+# 
 queries[18] = """
-select 0;
+with
+        v as (
+                select postid, count(postid) as vote_count
+                from votes
+                group by postid
+        ),
+        u as (
+                select distinct parentid
+                from posts
+                where parentid is not null
+        ),
+        w as (
+                select u.parentid as id, sum(v.vote_count) as total
+                from u, v
+                where v.postid = u.parentid
+                group by u.parentid
+        )
+select w.id, posts.title
+from w, posts, v, u
+where v.vote_count + w.total >= 100 and posts.id = w.id and v.postid = w.id
+group by w.id, posts.title
+order by w.id asc;
 """
+
 
 ### 19. Write a query to find posts where the post and the accepted answer
 ### are both owned by the same user (i.e., have the same "OwnerUserId") and the
@@ -223,9 +370,30 @@ select 0;
 ###
 ### Output columns: Id, Title
 ### Order by: Id Ascending
+
+# p = posts copy, o = posts with owner2
 queries[19] = """
-select 0;
+with p as (
+        select * from posts
+),
+o as (
+        select owneruserid, count(owneruserid)
+        from posts
+        group by owneruserid
+        having count(owneruserid) = 2
+        order by owneruserid asc
+)
+select p.id, p.title
+from posts, p, o
+where (
+        posts.id = p.acceptedanswerid and
+        posts.owneruserid = p.owneruserid and
+        o.owneruserid = p.owneruserid
+)        
+group by p.id, p.title
+order by p.id asc;
 """
+
 
 ### 20. Write a query to generate a table: 
 ### (VoteTypeDescription, Day_of_Week, Num_Votes)
@@ -239,5 +407,18 @@ select 0;
 ### Output column order: VoteTypeDescription, Day_of_Week, Num_Votes
 ### Order by VoteTypeDescription asc, Day_of_Week asc
 queries[20] = """
-select 0;
+select 
+        votetypes.description as votetypedescription, 
+        extract(dow from votes.creationdate), 
+        count(votes.id) as num_votes
+from votes
+        join votetypes
+        on (votes.votetypeid = votetypes.votetypeid)
+group by 
+        votetypes.description, 
+        extract(dow from votes.creationdate)
+order by 
+        votetypes.description asc, 
+        extract(dow from votes.creationdate) asc;
 """
+
