@@ -28,7 +28,7 @@ select 0;
 """
 
 ### 2 [0.5]. Write a single query/statement to set the values of the new columns. 
-### Use "age()" function to find the age of the Post as of "September 1, 2022". 
+### Use "age()" function to find the age of the Post as of "September 1, 2022" in years. 
 ###
 ### The "Popularity" column should be set as follows:
 ### High: ViewCount >= 20000, Medium: ViewCount between 10000 and 20000, 
@@ -69,7 +69,7 @@ queries[4] = """
 select 0;
 """
 
-### 5 [0.25]. Write a single query to rank the "Posts" by the number of comments, with the Post 
+### 5 [0.25]. Write a single query to rank the "Posts" by the number of votes, with the Post 
 ### with the highest number of votes getting rank 1. 
 ### If there are ties, the two (or more) votes should get the same "rank", and next ranks 
 ### should be skipped.
@@ -176,9 +176,11 @@ select 0;
 ###    "displayname": "Kim", 
 ###   "badges": [ {"name": "Autobiographer", "class": 3, "date": "2011-01-03"}, 
 ###                {"name": "Supporter", "class": 3, "date": "2011-02-25"}, 
-###                {"name": " Teacher", "class": 3, "date": "2011-02-25"}, 
+###                {"name": "Teacher", "class": 3, "date": "2011-02-25"}, 
 ###                {"name": "Critic", "class": 3, "date": "2011-02-28"}
 ###    ]}
+###
+### The badges (inside the array) should be ordered by date first (increasing) and then by the name of the badge.
 ### 
 ###
 ### You should use PL/pgSQL for this purpose -- writing this purely in SQL is somewhat cumbersome.
