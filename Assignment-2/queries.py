@@ -24,7 +24,10 @@ order by Id asc;
 ### See: https://www.postgresql.org/docs/current/datatype-enum.html if you are
 ### unsure how to use the enum type
 queries[1] = """
-select 0;
+ALTER TABLE postscopy
+ADD age INT,
+ADD ownerdisplayname VARCHAR(40),
+ADD popularity POPULARITYSCALE;
 """
 
 ### 2 [0.5]. Write a single query/statement to set the values of the new columns. 
@@ -42,13 +45,27 @@ select 0;
 ### https://www.postgresql.org/docs/current/sql-update.html has examples at the
 ### bottom to show how to update multiple columns in the same query
 queries[2] = """
-select 0;
+UPDATE postscopy
+    SET
+        age = EXTRACT(year FROM AGE('2022-09-01', postscopy.CreationDate)),
+        ownerdisplayname = users.displayname,
+        popularity = 
+            CASE
+                WHEN ViewCount >= 20000
+                    THEN 'High'::popularityscale
+                WHEN ViewCount < 10000
+                    THEN 'Low'::popularityscale 
+                ELSE 'Medium'::popularityscale
+            END
+        FROM users
+        WHERE users.id = postscopy.owneruserid;
+
 """
 
 
 ### 3 [0.25]. Write a query "delete" all Posts from PostsCopy where tags is null.
 queries[3] = """
-select 0;
+DELETE FROM postscopy WHERE tags IS NULL;
 """
 
 ### 4 [0.5]. Use "generate_series" to write a single statement to insert 10 new tuples
@@ -66,8 +83,18 @@ select 0;
 ### 
 ### Use `select * from postscopy where id > 100000;` to confirm.
 queries[4] = """
-select 0;
+INSERT INTO postscopy(id, posttypeid, title, CreationDate, Score, OwnerUserId, LastEditorUserId)
+    SELECT
+        100001 + n,
+        1,
+        'Post ' || 100001 + n,
+        '2022-10-01'::timestamp + (n * '1 day'::interval),
+        0,
+        -1,
+        -1
+    FROM generate_series(0,9) as g(n);
 """
+
 
 ### 5 [0.25]. Write a single query to rank the "Posts" by the number of votes, with the Post 
 ### with the highest number of votes getting rank 1. 
@@ -84,8 +111,42 @@ select 0;
 ### Output Columns: PostID, Rank
 ### Order by: Rank ascending, PostID ascending
 queries[5] = """
-select 0;
+with temp as (
+    select posts.id as postid, count(votes.id) as numvotes
+    from
+        posts left join votes on (posts.id = votes.postid)
+    group by posts.id
+)
+select postid, rank() over (order by numvotes desc) as rank
+from temp
+order by rank asc, postid asc;
 """
+
+
+
+"""
+WITH temp(postid, numvotes) AS (
+    SELECT votes.postid, coalesce(count(votes.postid),0) AS numvotes
+    FROM posts LEFT JOIN votes ON posts.id = votes.postid
+    GROUP BY votes.postid
+)
+SELECT postid, rank() OVER (partition by postid ORDER BY numvotes DESC) AS rank
+FROM temp
+ORDER BY rank ASC, postid ASC;
+"""
+
+"""
+WITH temp(postid, numvotes) as
+    (select postid, coalesce(count(postid),0) as numvotes
+    from votes
+    group by postid)
+SELECT postid, rank() over (order by numvotes desc) as rank
+from temp
+order by rank asc, postid asc;
+"""
+
+
+
 
 
 ### 6 [0.25]. Write a statement to create a new View with the signature:
@@ -106,8 +167,50 @@ select 0;
 ###
 ### Ensure that the latter is case (i.e., the query for a single ID runs quickly).
 ###
+# 
 queries[6] = """
-select 0;
+create view userssummary(id, numownerposts, numlasteditorposts, numbadges) as
+select
+    users.id,
+    (select count(posts.id) from posts
+        where users.id = posts.owneruserid) as numownerposts,
+    (select count(posts.id) from posts
+        where users.id = posts.lasteditoruserid) as numlasteditorposts,
+    (select count(badges.id) from badges
+        where users.id = badges.userid) as numbadges
+from users;
+"""
+
+
+
+
+
+"""
+create view UsersSummary(Id, NumOwnerPosts, NumLastEditorPosts, NumBadges) as
+with
+    own(uid, postid) as
+        (select users.id, posts.id
+        from users left join posts
+        on users.id=posts.owneruserid),
+    last(uid, postid) as
+        (select users.id, posts.id
+        from users left join posts
+        on users.id=posts.lasteditoruserid),
+    badg(uid, badgid) as
+        (select users.id, badges.id
+        from users left join badges
+        on users.id = badges.id)
+select
+    own.uid as id,
+    count(distinct own.postid) as numownerposts,
+    count(distinct last.postid) as numlasteditorposts,
+    count(distinct badg.badgid) as numbadges
+from own, last, badg
+where own.uid = last.uid
+and
+own.uid = badg.uid
+group by own.uid, last.uid, badg.uid
+;
 """
 
 ### 7 [0.5]. Use window functions to construct a query to associate with each user
@@ -143,9 +246,18 @@ with temp as (
         select ID, displayName, extract(year from CreationDate) as JoinedYear, Views
         from users
         )
-select *
-from temp;
+select
+    temp.ID, 
+    temp.DisplayName, 
+    temp.JoinedYear, 
+    temp.Views, 
+    avg(temp.views) 
+        over (partition by temp.joinedyear) as AvgViewsForUsersFromThatYear
+from temp
+order by joinedyear, id;
 """
+# TODO note: dont put brackets at outer select
+# makes it one column instead of 5
 
 ### 8 [0.25]. Write a function that takes in the ID of a Post as input, and returns the
 ### number of comments for that user.
@@ -163,8 +275,30 @@ from temp;
 ### As for one of the questions above, trying to run this query without "limit" 
 ### will be very slow given the number of posts.
 ###
+
+# every sql statement must be executed individually.
+# client must send each query to the db server, wait, receive n
+# process results, compute, then send further queries.
+# interprocess communication, network overhead
+# PL/pgSQL: group a block of computation and a series of queries
+# inside the db server, have power of a procedural language and the ease of use
+# of SQL, but with considerable savings because you don't have the whole client/server
+# communication overhead
 queries[8] = """
-select 0;
+create function numcomments(x int) 
+    returns bigint
+    language plpgsql
+as $$
+declare
+    num integer;
+begin
+    select count(comments.postid) into num
+    from comments
+    where comments.postid = x;
+    return num;
+end;
+$$;
+select ID, Title, NumComments(ID) from Posts limit 100;
 """
 
 ### 9 [0.5]. Write a function that takes in an Userid as input, and returns a JSON string with 
@@ -197,16 +331,18 @@ select 0;
 ### 
 ### Confirm that: 'select userbadges(10);' returns the result above.
 queries[9] = """
-    select 0;
+create function userbadges(x int)
+returns
+select 0;
 """
 
 ### 10/11 [0.5]. Create a new table using:
-###         create table MostFavoritedPosts as
-###             select p.ID, p.Title, count(v.ID) as NumFavorites
-###             from posts p left join votes v 
-###                            on (p.id = v.postid and v.votetypeid = 5)
-###             group by p.id, p.title
-###             having count(v.ID) > 10;
+        # create table MostFavoritedPosts as
+        #     select p.ID, p.Title, count(v.ID) as NumFavorites
+        #     from posts p left join votes v 
+        #                    on (p.id = v.postid and v.votetypeid = 5)
+        #     group by p.id, p.title
+        #     having count(v.ID) > 10;
 ###
 ### Note: `votetypeid = 5` is `Favorite`
 ###
@@ -229,7 +365,25 @@ queries[9] = """
 ###
 ### The trigger should also be named: UpdateMostFavoritedOnInsert
 queries[10] = """
-select 0;
+drop table if exists mostfavoritedposts;
+create table MostFavoritedPosts as
+    select p.ID, p.Title, count(v.ID) as NumFavorites
+    from posts p left join votes v 
+                    on (p.id = v.postid and v.votetypeid = 5)
+    group by p.id, p.title
+    having count(v.ID) > 10;
+
+create or replace function UpdateMostFavoritedOnInsert()
+returns trigger
+language plpgsql
+as
+$$
+begin
+    if (
+        (select count(*)...
+        )
+    )
+$$
 """
 ### CREATE OR REPLACE FUNCTION UpdateMostFavoritedOnInsert()
 ###  RETURNS TRIGGER
