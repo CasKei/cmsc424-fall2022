@@ -9,7 +9,7 @@ CORS(app)
 
 class Post(Resource):
     def get(self, postid):
-        #####################################################################################3
+        #####################################################################################
         #### Important -- This is the how the connection must be done for autograder to work
         ### But on your local machine, you may need to remove "host=..." part if this doesn't work
         #####################################################################################3
@@ -44,9 +44,15 @@ class User(Resource):
     # Remove NULL titles if any
     # FORMAT: {"ID": "...", "DisplayName": "...", "CreationDate": "...", "Reputation": "...", "PostTitles": ["posttitle1", "posttitle2", ...]}
     def get(self, userid):
+        
+        conn = psycopg2.connect("host=127.0.0.1 dbname=stackexchange user=root password=root")
+        cur = conn.cursor()
+
         # Add your code to construct "ret" using the format shown below
         # Post Titles must be sorted in alphabetically increasing order
         # CreationDate should be of the format: "2007-02-04" (this is what Python str() will give you)
+        
+        
 
         # Add your code to check if the userid is already present in the database
         exists_user = True
