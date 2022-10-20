@@ -44,6 +44,7 @@ public class NearestNeighbor {
 			add_col_nn = connection.createStatement();
 			add_col_nn.executeUpdate(add_col_nn_str);
 			System.out.println("Added column nearest_neighbours to users");
+			connection.commit();
 			add_col_nn.close();
 		} catch (SQLException e) {
 			System.out.println(e);
@@ -78,6 +79,7 @@ public class NearestNeighbor {
 
 				stash.put(id, h);
 			}
+			connection.commit();
 			stmt2.close();
 
 		} catch (SQLException e) {
@@ -113,6 +115,7 @@ public class NearestNeighbor {
 			try {
 				stmt = connection.createStatement();
 				stmt.executeUpdate(update_query);
+				connection.commit();
 				stmt.close();
 			} catch (SQLException e) {
 				System.out.println(e);
