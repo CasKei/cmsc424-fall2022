@@ -1,6 +1,6 @@
 ### 0. Return all the entries in accounts collection
 def query0(db):
-    return db['accounts'].find({})
+    return db['customers'].find({}) # accounts, customers, transactions
 
 ### 1. Find all information for the customer with username 'fmiller'
 def query1(db):
